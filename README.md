@@ -8,7 +8,7 @@ It queries the running Sway session with `swaymsg`, shows the available outputs,
 
 - View connected Sway outputs in a compact terminal UI
 - Place the selected output left, right, above, or below another output
-- Move the focused workspace to the selected output
+- Move the focused workspace to a chosen output through a small picker
 - Restore the last saved arrangement for each output
 - Store preferences in a local JSON config file
 
@@ -18,9 +18,9 @@ It queries the running Sway session with `swaymsg`, shows the available outputs,
 - `Left` / `Right`: switch between workspaces and outputs
 - `Tab` / `Shift+Tab`: cycle the anchor output
 - `h` / `l` / `k` / `j`: apply left, right, above, or below
-- `m`: move the focused workspace to the selected output
-- `Enter`: apply the saved action
-- `q` / `Esc`: quit
+- `Enter` on the workspace list: open the output picker for moving the focused workspace
+- `Enter` on the output list: apply the saved action
+- `Esc`: cancel the picker or quit when no picker is open
 
 ## Requirements
 

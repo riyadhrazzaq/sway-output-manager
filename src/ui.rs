@@ -2,7 +2,7 @@
 
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::prelude::*;
-use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap};
 
 use crate::app::App;
 use crate::sway::Arrangement;
@@ -152,6 +152,79 @@ fn draw_body(frame: &mut Frame, area: Rect, app: &App) {
 
     let details = render_details(app);
     frame.render_widget(details, columns[2]);
+
+    if app.is_move_target_picker_open() {
+        render_move_target_picker(frame, area, app);
+    }
+}
+
+fn render_move_target_picker(frame: &mut Frame, area: Rect, app: &App) {
+    if app.outputs.is_empty() {
+        return;
+    }
+
+    let popup_area = centered_rect(60, 52, area);
+    frame.render_widget(Clear, popup_area);
+
+    let popup = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(3), Constraint::Min(3)])
+        .split(popup_area);
+
+    let header = Paragraph::new("Select an output for the selected workspace")
+        .block(Block::default().borders(Borders::ALL).title("Move workspace"))
+        .wrap(Wrap { trim: true });
+    frame.render_widget(header, popup[0]);
+
+    let items = app
+        .outputs
+        .iter()
+        .enumerate()
+        .map(|(index, output)| {
+            let marker = if Some(index) == app.move_target_output_index() {
+                "▶"
+            } else {
+                " "
+            };
+
+            ListItem::new(Line::from(vec![
+                Span::styled(marker, Style::default().fg(Color::Yellow)),
+                Span::raw(" "),
+                Span::raw(output.summary()),
+            ]))
+        })
+        .collect::<Vec<_>>();
+
+    let picker = List::new(items).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title("Output")
+            .border_style(Style::default().fg(Color::Yellow)),
+    );
+
+    let mut state = ListState::default();
+    state.select(app.move_target_output_index());
+    frame.render_stateful_widget(picker, popup[1], &mut state);
+}
+
+fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
+    let vertical = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(area);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(vertical[1])[1]
 }
 
 fn render_details(app: &App) -> Paragraph<'_> {
@@ -230,11 +303,10 @@ fn render_details(app: &App) -> Paragraph<'_> {
         Arrangement::Below.shortcut(),
         Arrangement::Below.label()
     )));
-    lines.push(Line::from(
-        "  m          move selected workspace to selected output",
-    ));
-    lines.push(Line::from("  Enter      apply saved action"));
-    lines.push(Line::from("  q / Esc    quit"));
+    lines.push(Line::from("  Enter      on workspace: choose move target"));
+    lines.push(Line::from("              on output: apply saved action"));
+    lines.push(Line::from("  Esc        cancel move picker / quit"));
+    lines.push(Line::from("  q          quit"));
 
     Paragraph::new(lines)
         .block(Block::default().title("Details").borders(Borders::ALL))

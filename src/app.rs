@@ -27,6 +27,7 @@ pub struct App {
     pub anchor_output: usize,
     pub selected_action: Arrangement,
     list_focus: ListFocus,
+    move_target_output: Option<usize>,
     pub status: String,
     pub(crate) config: AppConfig,
     should_quit: bool,
@@ -47,6 +48,7 @@ impl App {
             anchor_output: 0,
             selected_action: Arrangement::RightOf,
             list_focus: ListFocus::Workspaces,
+            move_target_output: None,
             status: String::from("ready"),
             config,
             should_quit: false,
@@ -75,16 +77,23 @@ impl App {
     }
 
     fn handle_key(&mut self, code: KeyCode) -> Result<()> {
+        if self.move_target_output.is_some() {
+            return self.handle_move_target_key(code);
+        }
+
         match code {
             KeyCode::Char('q') | KeyCode::Esc => self.should_quit = true,
             KeyCode::Left | KeyCode::Right => self.toggle_list_focus(),
             KeyCode::Up | KeyCode::Down => self.navigate_active_list(code),
             KeyCode::Tab => self.next_anchor(),
             KeyCode::BackTab => self.previous_anchor(),
-            KeyCode::Char('m') | KeyCode::Char('M') => {
-                self.move_selected_workspace_to_selected_output()?
+            KeyCode::Enter => {
+                if matches!(self.list_focus, ListFocus::Workspaces) {
+                    self.open_move_target_picker()?;
+                } else {
+                    self.apply_selected_action()?;
+                }
             }
-            KeyCode::Enter => self.apply_selected_action()?,
             KeyCode::Char(ch) => {
                 if let Some(action) = Arrangement::from_shortcut(ch) {
                     self.apply_action(action)?;
@@ -98,17 +107,45 @@ impl App {
         Ok(())
     }
 
+    fn handle_move_target_key(&mut self, code: KeyCode) -> Result<()> {
+        match code {
+            KeyCode::Esc => self.move_target_output = None,
+            KeyCode::Enter => self.move_selected_workspace_to_output_index()?,
+            KeyCode::Up => self.previous_move_target_output(),
+            KeyCode::Down => self.next_move_target_output(),
+            _ => {}
+        }
+
+        Ok(())
+    }
+
     fn apply_selected_action(&mut self) -> Result<()> {
         self.apply_action(self.selected_action)
     }
 
-    fn move_selected_workspace_to_selected_output(&mut self) -> Result<()> {
+    fn open_move_target_picker(&mut self) -> Result<()> {
+        if self.outputs.is_empty() {
+            self.status = String::from("no outputs are available");
+            return Ok(());
+        }
+
+        self.move_target_output = Some(self.selected_output.min(self.outputs.len() - 1));
+        self.status = String::from("select an output, then press Enter to move the workspace");
+        Ok(())
+    }
+
+    fn move_selected_workspace_to_output_index(&mut self) -> Result<()> {
+        let output_index = self
+            .move_target_output
+            .ok_or_else(|| anyhow!("no move target is selected"))?;
+
         let workspace = self
             .selected_workspace()
             .ok_or_else(|| anyhow!("no workspaces are available"))?
             .clone();
         let selected_output = self
-            .selected_output()
+            .outputs
+            .get(output_index)
             .ok_or_else(|| anyhow!("no outputs are available"))?
             .clone();
 
@@ -121,6 +158,7 @@ impl App {
 
         let workspace_name = workspace.name;
         let output_name = selected_output.name;
+        self.move_target_output = None;
         self.refresh_state(Some(&workspace_name), Some(&output_name), None)?;
         self.status = format!("moved workspace {} to {}", workspace_name, output_name);
 
@@ -384,6 +422,24 @@ impl App {
         }
     }
 
+    fn next_move_target_output(&mut self) {
+        if !self.outputs.is_empty() {
+            let current = self.move_target_output.unwrap_or(self.selected_output);
+            self.move_target_output = Some((current + 1) % self.outputs.len());
+        }
+    }
+
+    fn previous_move_target_output(&mut self) {
+        if !self.outputs.is_empty() {
+            let current = self.move_target_output.unwrap_or(self.selected_output);
+            self.move_target_output = Some(if current == 0 {
+                self.outputs.len() - 1
+            } else {
+                current - 1
+            });
+        }
+    }
+
     fn next_workspace(&mut self) {
         if !self.workspaces.is_empty() {
             self.selected_workspace = (self.selected_workspace + 1) % self.workspaces.len();
@@ -455,5 +511,13 @@ impl App {
 
     pub(crate) fn active_list_name(&self) -> &'static str {
         self.active_list_label()
+    }
+
+    pub(crate) fn is_move_target_picker_open(&self) -> bool {
+        self.move_target_output.is_some()
+    }
+
+    pub(crate) fn move_target_output_index(&self) -> Option<usize> {
+        self.move_target_output
     }
 }
