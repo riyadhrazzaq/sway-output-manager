@@ -52,4 +52,4 @@ Saved preferences live at:
 The file is created automatically the first time you save a preference.
 
 # AI Warning
-Vive coded with Copilot.
+Vibe coded with Copilot.
